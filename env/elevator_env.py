@@ -77,3 +77,94 @@ class Elevator:
             self.floors_moved += 1
             return self._try_open()
         return None
+
+
+
+
+class Passenger:
+    __slots__ = ("origin", "dest", "t_arrive", "t_board", "t_done")
+
+    def __init__(self, origin, dest, t_arrive):
+        self.origin = origin
+        self.dest = dest
+        self.t_arrive = t_arrive
+        self.t_board = None
+        self.t_done = None
+
+    @property
+    def direction(self):
+        return 1 if self.dest > self.origin else -1
+
+
+class ElevatorSim:
+    """The whole building: elevators, waiting passengers, hall calls."""
+
+    def __init__(self, cfg, traffic=None):
+        self.cfg = cfg
+        self.n_floors = cfg["building"]["n_floors"]
+        self.n_elevators = cfg["building"]["n_elevators"]
+        self.traffic = traffic            # any object with arrivals(t)
+        self.elevators = [Elevator(i, cfg) for i in range(self.n_elevators)]
+        self.reset()
+
+    def reset(self):
+        for e in self.elevators:
+            e.reset()
+        self.t = 0
+        self.waiting = {}      # (floor, direction) -> list of Passenger
+        self.calls = {}        # (floor, direction) -> assigned elevator index
+        self.unassigned = []   # hall calls waiting for a dispatch decision
+        self.finished = []     # delivered passengers
+        self.wait_accum = 0    # passenger-seconds waited (reset by the env)
+
+    def n_waiting(self):
+        return sum(len(q) for q in self.waiting.values())
+
+    def add_passenger(self, origin, dest):
+        p = Passenger(origin, dest, self.t)
+        key = (origin, p.direction)
+        self.waiting.setdefault(key, []).append(p)
+        if key not in self.calls and key not in self.unassigned:
+            self.unassigned.append(key)
+        return p
+
+    def assign(self, key, elev_idx):
+        """Dispatch decision: elevator elev_idx answers hall call key."""
+        self.unassigned.remove(key)
+        self.calls[key] = elev_idx
+        self.elevators[elev_idx].add_stop(key[0])
+
+    def _open_doors(self, e):
+        stay = []
+        for p in e.passengers:           # unload
+            if p.dest == e.floor:
+                p.t_done = self.t
+                self.finished.append(p)
+            else:
+                stay.append(p)
+        e.passengers = stay
+        for d in (1, -1):                # board
+            key = (e.floor, d)
+            if self.calls.get(key) != e.idx:
+                continue
+            queue = self.waiting.get(key, [])
+            while queue and e.load < e.capacity:
+                p = queue.pop(0)
+                p.t_board = self.t
+                e.passengers.append(p)
+                e.add_stop(p.dest)
+            del self.calls[key]
+            if queue:                    # elevator full: call needs a new decision
+                self.unassigned.append(key)
+            else:
+                self.waiting.pop(key, None)
+
+    def tick(self):
+        self.t += 1
+        self.wait_accum += self.n_waiting()
+        if self.traffic is not None:
+            for o, d in self.traffic.arrivals(self.t):
+                self.add_passenger(o, d)
+        for e in self.elevators:
+            if e.tick() == "open":
+                self._open_doors(e)
