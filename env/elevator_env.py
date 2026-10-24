@@ -3,7 +3,7 @@
 Step 3: single elevator movement. The Gymnasium environment class
 will be added below this class in later steps.
 """
-
+import numpy as np
 
 class Elevator:
     def __init__(self, idx, cfg):
@@ -110,6 +110,7 @@ class ElevatorSim:
         self.n_elevators = cfg["building"]["n_elevators"]
         self.traffic = traffic            # any object with arrivals(t)
         self.elevators = [Elevator(i, cfg) for i in range(self.n_elevators)]
+        self.failures = None              # optional FailureModel
         self.reset()
 
     def reset(self):
@@ -173,6 +174,8 @@ class ElevatorSim:
         for e in self.elevators:
             if e.tick() == "open":
                 self._open_doors(e)
+        if self.failures is not None:
+            self.failures.step(self)
 
     def _requeue(self, p, floor):
         """A passenger leaves a failed elevator and waits again at this floor."""
@@ -207,3 +210,33 @@ class ElevatorSim:
         e.passengers = []
         for p in riders:
             self._requeue(p, e.floor)
+
+class FailureModel:
+    """Random breakdowns, on average `expected_per_episode` per episode."""
+
+    def __init__(self, cfg, seed=None):
+        f = cfg["failures"]
+        self.enabled = f["enabled"]
+        self.p = f["expected_per_episode"] / cfg["simulation"]["episode_length"]
+        self.min_d = f["min_duration"]
+        self.max_d = f["max_duration"]
+        self.max_down = f["max_simultaneous"]
+        self.rng = np.random.default_rng(seed)
+        self.log = []                     # (time, elevator, duration)
+
+    def reset(self, seed=None):
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+        self.log = []
+
+    def step(self, sim):
+        if not self.enabled:
+            return
+        down = sum(not e.available for e in sim.elevators)
+        if down >= self.max_down or self.rng.random() >= self.p:
+            return
+        up = [e.idx for e in sim.elevators if e.available]
+        idx = int(self.rng.choice(up))
+        dur = int(self.rng.integers(self.min_d, self.max_d + 1))
+        sim.fail_elevator(idx, dur)
+        self.log.append((sim.t, idx, dur))
