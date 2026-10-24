@@ -38,7 +38,18 @@ class ElevatorEnv(gym.Env):
 
     # ---------- helpers ----------
     def action_mask(self):
-        return np.array([e.available for e in self.sim.elevators], dtype=np.int8)
+        """1 = elevator may take the current call.
+        Failed elevators are never allowed. Full elevators are excluded while
+        another elevator has room; if all are full, only a full elevator that is
+        not standing at the call floor may take it (prevents a door-reopen loop)."""
+        avail = np.array([e.available for e in self.sim.elevators])
+        room = np.array([e.load < e.capacity for e in self.sim.elevators])
+        mask = avail & room
+        if not mask.any():
+            floor = self.key[0] if self.key is not None else -1
+            away = np.array([e.floor != floor for e in self.sim.elevators])
+            mask = avail & away
+        return mask.astype(np.int8)
 
     def _obs(self):
         f = self.n_floors - 1
@@ -95,16 +106,18 @@ class ElevatorEnv(gym.Env):
     def step(self, action):
         action = int(action)
         mask = self.action_mask()
-        if not mask[action]:                      # failed elevator chosen
+        if not mask[action]:                      # masked elevator chosen
             valid = np.flatnonzero(mask)
             action = int(valid[0]) if len(valid) else None
-        if action is not None:
-            self.sim.assign(self.key, action)
-        else:                                     # every elevator is down
-            self.sim.unassigned.append(self.sim.unassigned.pop(0))
 
         w0, e0 = self.sim.wait_accum, self._energy()
-        unfair = self._advance()
+        unfair = 0
+        if action is not None:
+            self.sim.assign(self.key, action)
+        else:                                     # nobody can take it yet:
+            self.sim.tick()                       # let one second pass
+            unfair += self._unfair_now()
+        unfair += self._advance()
         wait = self.sim.wait_accum - w0
         energy = self._energy() - e0
         reward = -(self.alpha * wait + self.beta * unfair + self.gamma * energy)

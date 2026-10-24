@@ -24,7 +24,7 @@ Global (3 features):
 
 ## Action
 Discrete(n_elevators). Action i = assign the new call to elevator i.
-Failed elevators are masked: info["action_mask"] is a 0/1 array.
+Failed elevators are masked, and full elevators are masked while another has room: info["action_mask"] is a 0/1 array.
 
 ## Reward
 r = -(alpha * wait + beta * unfair + gamma * energy)
