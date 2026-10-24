@@ -29,7 +29,7 @@ failures:
 reward:
   alpha: 0.01            # weight on waiting
   beta: 0.05             # weight on unfairness
-  gamma: 0.1             # weight on energy
+  gamma: 0.01            # weight on energy
   unfair_threshold: 60   # seconds
   energy_per_floor: 1.0
   energy_per_start_stop: 0.5
