@@ -1,0 +1,48 @@
+building:
+  n_floors: 10
+  n_elevators: 4
+  capacity: 8
+  lobby_floor: 0
+
+simulation:
+  dt: 1                  # seconds per time step
+  episode_length: 3600   # seconds (1 hour)
+  seconds_per_floor: 2   # travel time between adjacent floors
+  door_time: 4           # seconds stopped at a floor
+
+traffic:
+  arrival_rate: 0.15     # passengers per second (about 540 per hour)
+  patterns:
+    up_peak:   {up: 0.70, down: 0.10, interfloor: 0.20, rate_multiplier: 1.2}
+    down_peak: {up: 0.10, down: 0.70, interfloor: 0.20, rate_multiplier: 1.2}
+    mixed:     {up: 0.30, down: 0.30, interfloor: 0.40, rate_multiplier: 1.0}
+  # the "fluctuating" pattern (in traffic.py) runs up_peak, mixed, down_peak
+  # in three equal phases of one episode
+
+failures:
+  enabled: true
+  expected_per_episode: 1.5
+  min_duration: 120      # seconds out of service
+  max_duration: 400
+  max_simultaneous: 1
+
+reward:
+  alpha: 0.01            # weight on waiting
+  beta: 0.05             # weight on unfairness
+  gamma: 0.1             # weight on energy
+  unfair_threshold: 60   # seconds
+  energy_per_floor: 1.0
+  energy_per_start_stop: 0.5
+
+dqn:
+  hidden: 128
+  lr: 0.001
+  discount: 0.99
+  batch_size: 64
+  buffer_size: 50000
+  target_update_steps: 500
+  eps_start: 1.0
+  eps_end: 0.05
+  eps_decay_steps: 20000
+  train_episodes: 500
+  seed: 42
