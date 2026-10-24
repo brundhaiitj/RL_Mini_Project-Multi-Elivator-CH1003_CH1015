@@ -25,6 +25,7 @@ class Elevator:
         self.was_stopped = True
         self.floors_moved = 0     # energy counters
         self.starts = 0
+        self.repair_timer = 0     # seconds until a failed elevator works again
 
     @property
     def load(self):
@@ -56,6 +57,10 @@ class Elevator:
     def tick(self):
         """Advance one second. Returns "open" when doors just opened."""
         if not self.available:
+            if self.repair_timer > 0:
+                self.repair_timer -= 1
+                if self.repair_timer == 0:
+                    self.available = True
             return None
         if self.door_timer > 0:
             self.door_timer -= 1
@@ -168,3 +173,37 @@ class ElevatorSim:
         for e in self.elevators:
             if e.tick() == "open":
                 self._open_doors(e)
+
+    def _requeue(self, p, floor):
+        """A passenger leaves a failed elevator and waits again at this floor."""
+        if p.dest == floor:
+            p.t_done = self.t
+            self.finished.append(p)
+            return
+        p.origin = floor
+        p.t_board = None
+        key = (floor, p.direction)
+        self.waiting.setdefault(key, []).append(p)
+        if key not in self.calls and key not in self.unassigned:
+            self.unassigned.append(key)
+
+    def fail_elevator(self, idx, duration):
+        """Take elevator idx out of service for `duration` seconds."""
+        e = self.elevators[idx]
+        if not e.available:
+            return
+        e.available = False
+        e.repair_timer = duration
+        e.door_timer = 0
+        e.move_timer = 0
+        e.direction = 0
+        e.stops = set()
+        for key, i in list(self.calls.items()):   # its calls need a new decision
+            if i == idx:
+                del self.calls[key]
+                if key not in self.unassigned:
+                    self.unassigned.append(key)
+        riders = e.passengers                     # passengers get out here
+        e.passengers = []
+        for p in riders:
+            self._requeue(p, e.floor)
