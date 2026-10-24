@@ -2,7 +2,7 @@
 
 DQN-based dispatcher compared with nearest-car and collective-control baselines.
 
-Team: Brundha Devi A, Anshika Role
+Team: Brundha Devi A(B23CH1015), Anshika Role(B23CH1003)
 
 ## Installation
 python3 -m venv venv
