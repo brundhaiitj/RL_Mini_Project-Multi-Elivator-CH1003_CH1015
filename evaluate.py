@@ -5,8 +5,9 @@ traffic patterns and seeds, with and without failures, so the numbers
 are directly comparable. Metrics follow METRICS.md.
 
 Usage:
-    python evaluate.py                    # all baselines, 20 seeds
+    python evaluate.py                    # baselines + trained DQN, 20 seeds
     python evaluate.py --seeds 3          # quick check
+    python evaluate.py --no-dqn --out results/baselines.csv   # baselines only
 """
 import argparse
 import csv
@@ -20,6 +21,7 @@ from env.gym_env import ElevatorEnv
 from baselines.random_agent import RandomAgent
 from baselines.nearest_car import NearestCar
 from baselines.collective import CollectiveControl
+from agent.dqn import DQNAgent
 
 PATTERNS = ["up_peak", "down_peak", "mixed", "fluctuating"]
 METRICS = ["return", "avg_wait", "p95_wait", "max_wait", "pct_over_60",
@@ -31,8 +33,15 @@ def make_baselines():
             "collective": CollectiveControl()}
 
 
+def load_dqn(cfg, path):
+    n = cfg["building"]["n_elevators"]
+    agent = DQNAgent(6 * n + 3, n, cfg["dqn"])
+    agent.load(path)
+    return agent
+
+
 def choose(policy, env, obs, info):
-    """Baselines look at the simulator; the DQN agent (added later) uses obs + mask."""
+    """Baselines look at the simulator; the DQN agent uses obs + action mask."""
     if hasattr(policy, "act"):
         return policy.act(obs, info["action_mask"])
     a = policy.select(env.sim, env.key)
@@ -102,11 +111,16 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="configs/default.yaml")
     ap.add_argument("--seeds", type=int, default=20, help="evaluation seeds 0..N-1")
-    ap.add_argument("--out", default="results/baselines.csv")
+    ap.add_argument("--dqn", default="models/dqn_mixed.pt", help="trained DQN model")
+    ap.add_argument("--no-dqn", action="store_true", help="evaluate baselines only")
+    ap.add_argument("--out", default="results/all_methods.csv")
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.config))
+    methods = make_baselines()
+    if not args.no_dqn:
+        methods["dqn"] = load_dqn(cfg, args.dqn)
     start = time.time()
-    rows = evaluate(cfg, make_baselines(), range(args.seeds))
+    rows = evaluate(cfg, methods, range(args.seeds))
     save_csv(rows, args.out)
     print(f"saved {len(rows)} rows to {args.out} in {time.time() - start:.0f}s")
