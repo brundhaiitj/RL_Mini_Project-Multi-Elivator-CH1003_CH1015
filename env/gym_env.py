@@ -30,7 +30,7 @@ class ElevatorEnv(gym.Env):
         self.thr = r["unfair_threshold"]
         self.e_floor = r["energy_per_floor"]
         self.e_start = r["energy_per_start_stop"]
-        self.obs_dim = 6 * self.n_elev + 3
+        self.obs_dim = 7 * self.n_elev + 3
         self.observation_space = spaces.Box(-1.0, 1.0, (self.obs_dim,), np.float32)
         self.action_space = spaces.Discrete(self.n_elev)
         self.sim = None
@@ -61,9 +61,28 @@ class ElevatorEnv(gym.Env):
                   e.load / self.capacity,
                   float(e.available),
                   min(len(e.stops) / 10, 1.0),
-                  abs(call_floor - e.floor) / f]
+                  abs(call_floor - e.floor) / f,
+                  min(self._eta(e, call_floor, call_dir) / 60.0, 1.0)]
         x += [call_floor / f, float(call_dir), min(self.sim.n_waiting() / 50, 1.0)]
         return np.array(x, dtype=np.float32)
+
+    def _eta(self, e, floor, direction):
+        """Estimated seconds until elevator e can reach the call, given its direction."""
+        if not e.available:
+            return 60.0
+        if e.direction == 0:
+            dist = abs(floor - e.floor)
+        else:
+            d = e.direction
+            diff = (floor - e.floor) * d
+            ahead = diff > 0 or (diff == 0 and e.move_timer == 0)
+            if ahead and direction == d:
+                dist = abs(floor - e.floor)
+            else:
+                stops = list(e.stops) + [e.floor]
+                far = max(stops) if d == 1 else min(stops)
+                dist = abs(far - e.floor) + abs(far - floor)
+        return dist * e.spf + len(e.stops) * e.door_time + e.door_timer
 
     def _energy(self):
         return sum(e.floors_moved * self.e_floor + e.starts * self.e_start

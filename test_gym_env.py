@@ -13,7 +13,7 @@ env = ElevatorEnv(cfg, pattern="mixed", failures=True)
 obs, info = env.reset(seed=0)
 print("observation shape:", obs.shape, " actions:", env.action_space.n)
 print("first call:", env.key, " mask:", info["action_mask"])
-assert obs.shape == (27,) and env.observation_space.contains(obs)
+assert obs.shape == (31,) and env.observation_space.contains(obs)
 check_env(env.unwrapped, skip_render_check=True)
 print("gymnasium check_env passed")
 
