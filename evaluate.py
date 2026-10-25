@@ -34,8 +34,8 @@ def make_baselines():
 
 
 def load_dqn(cfg, path):
-    n = cfg["building"]["n_elevators"]
-    agent = DQNAgent(6 * n + 3, n, cfg["dqn"])
+    env = ElevatorEnv(cfg)                 # state size comes from the environment
+    agent = DQNAgent(env.obs_dim, env.n_elev, cfg["dqn"])
     agent.load(path)
     return agent
 
